@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from datetime import datetime
+import os
 
 DATA_DIR = Path(__file__).parent.parent
 DATA_FILE = DATA_DIR / "user_data.json"
@@ -27,7 +27,6 @@ def save_data(data):
     with open(DATA_FILE, 'w') as f:
         json.dump(data, f, indent=2)
 
-# Функции для работы с парами
 def get_pairs(user_id):
     return load_data()["pairs"].get(str(user_id), [])
 
@@ -65,7 +64,6 @@ def remove_all_pairs(user_id):
         return True
     return False
 
-# Функции для работы с настройками
 def get_user_settings(user_id):
     data = load_data()
     return data["settings"].get(str(user_id), {"rsi_period": 14})
