@@ -10,7 +10,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-BOT_TOKEN = "ВАШ_ТОКЕН"
+BOT_TOKEN = "8189844575:AAFX5CUov29I-mokX6pGAn2DUi_7uGLh7EY"
 CHECK_INTERVAL = 300  # 5 минут
 
 class RSIMonitor:
