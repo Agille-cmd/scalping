@@ -9,6 +9,9 @@ TELEGRAM_TOKEN = config['telegram_token']
 ALPHA_VANTAGE_API_KEY = config['alpha_vantage_api_key']
 
 AVAILABLE_PAIRS = [
-    "EUR/USD", "USD/JPY", "GBP/USD", "USD/CHF", "AUD/USD",
-    "USD/CAD", "NZD/USD", "EUR/JPY", "GBP/JPY", "EUR/GBP"
+    "EUR/USD", "USD/JPY", "GBP/USD", "AUD/USD", 
+    "USD/CAD", "USD/CHF", "NZD/USD", "EUR/GBP",
+    "EUR/JPY", "GBP/JPY", "AUD/JPY", "EUR/CAD",
+    "AUD/CAD", "CAD/JPY", "CHF/JPY", "EUR/AUD",
+    "EUR/NZD", "GBP/CAD", "GBP/CHF", "NZD/JPY"
 ]

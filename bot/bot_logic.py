@@ -1,71 +1,86 @@
-from aiogram import Bot, Dispatcher, Router, types
+from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
-from aiogram.types import Message
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 from bot.data import TELEGRAM_TOKEN, AVAILABLE_PAIRS
 from bot.user_data import *
 from bot.indicators import get_rsi
 
 bot = Bot(token=TELEGRAM_TOKEN)
 dp = Dispatcher()
-router = Router()
+
+# Клавиатура для выбора пар
+def pairs_keyboard(action: str):
+    builder = InlineKeyboardBuilder()
+    for pair in AVAILABLE_PAIRS:
+        builder.button(text=pair, callback_data=f"{action}_{pair}")
+    builder.adjust(2)
+    return builder.as_markup()
 
 @dp.message(Command("help"))
 async def help_command(msg: Message):
-    text = (
-        "🤖 *Доступные команды:*\n"
-        "/help — помощь\n"
-        "/check — проверить RSI ваших пар\n"
-        "/pairs — доступные валютные пары\n"
-        "/list — ваши подписки\n"
-        "/add EUR/USD — добавить пару\n"
-        "/add_all — подписаться на все пары\n"
-        "/remove EUR/USD — убрать пару\n"
-        "/remove_all — убрать все пары\n"
-        "/rsi 10 — установить период RSI\n"
-        "\nБот автоматически уведомит при RSI > 70 или < 30"
+    help_text = (
+        "🤖 *Бот мониторинга RSI*\n\n"
+        "🔹 Основные команды:\n"
+        "/pairs - доступные пары\n"
+        "/list - ваши подписки\n"
+        "/add - добавить пару (меню)\n"
+        "/remove - убрать пару (меню)\n"
+        "/add_all - подписаться на все\n"
+        "/remove_all - очистить подписки\n"
+        "/rsi [число] - изменить период\n"
+        "/check - проверить текущие RSI\n\n"
+        "📊 Бот автоматически уведомляет при:\n"
+        "RSI > 70 (перекупленность)\n"
+        "RSI < 30 (перепроданность)"
     )
-    await msg.answer(text, parse_mode="Markdown")
-
-@dp.message(Command("pairs"))
-async def pairs_command(msg: Message):
-    await msg.answer("📊 Доступные пары:\n" + "\n".join(AVAILABLE_PAIRS))
-
-@dp.message(Command("list"))
-async def list_command(msg: Message):
-    pairs = get_user_pairs(msg.from_user.id)
-    await msg.answer("Ваши пары:\n" + "\n".join(pairs) if pairs else "Нет подписок")
+    await msg.answer(help_text, parse_mode="Markdown")
 
 @dp.message(Command("add"))
-async def add_command(msg: Message):
-    try:
-        pair = msg.text.split()[1].upper()
-        if pair in AVAILABLE_PAIRS:
-            add_pair(msg.from_user.id, pair)
-            await msg.answer(f"✅ Добавлено: {pair}")
-        else:
-            await msg.answer("Неверная пара. Используйте /pairs")
-    except IndexError:
-        await msg.answer("Укажите пару: /add EUR/USD")
-
-@dp.message(Command("add_all"))
-async def add_all_command(msg: Message):
-    for pair in AVAILABLE_PAIRS:
-        add_pair(msg.from_user.id, pair)
-    await msg.answer("✅ Подписаны на все пары")
+async def add_menu(msg: Message):
+    await msg.answer(
+        "Выберите пару для добавления:",
+        reply_markup=pairs_keyboard("add")
+    )
 
 @dp.message(Command("remove"))
-async def remove_command(msg: Message):
-    try:
-        pair = msg.text.split()[1].upper()
-        remove_pair(msg.from_user.id, pair)
-        await msg.answer(f"❌ Удалено: {pair}")
-    except IndexError:
-        await msg.answer("Укажите пару: /remove EUR/USD")
+async def remove_menu(msg: Message):
+    await msg.answer(
+        "Выберите пару для удаления:",
+        reply_markup=pairs_keyboard("remove")
+    )
+
+@dp.message(Command("add_all"))
+async def add_all(msg: Message):
+    for pair in AVAILABLE_PAIRS:
+        add_pair(msg.from_user.id, pair)
+    await msg.answer("✅ Подписаны на все доступные пары")
 
 @dp.message(Command("remove_all"))
-async def remove_all_command(msg: Message):
+async def remove_all(msg: Message):
     clear_pairs(msg.from_user.id)
-    await msg.answer("🧹 Все пары удалены")
+    await msg.answer("🧹 Все подписки удалены")
+
+@dp.callback_query(lambda c: c.data.startswith(("add_", "remove_")))
+async def handle_pair_selection(callback: types.CallbackQuery):
+    action, pair = callback.data.split('_')
+    user_id = callback.from_user.id
+    
+    if action == "add":
+        if add_pair(user_id, pair):
+            await callback.answer(f"✅ {pair} добавлена")
+        else:
+            await callback.answer(f"❌ {pair} уже есть")
+    else:
+        if remove_pair(user_id, pair):
+            await callback.answer(f"❌ {pair} удалена")
+        else:
+            await callback.answer(f"⚠️ {pair} не найдена")
+
+    # Обновляем сообщение с кнопками
+    await callback.message.edit_reply_markup(
+        reply_markup=pairs_keyboard(action)
+    )
 
 @dp.message(Command("rsi"))
 async def set_rsi(msg: Message):
@@ -78,6 +93,15 @@ async def set_rsi(msg: Message):
             await msg.answer("Период должен быть 1-100")
     except (IndexError, ValueError):
         await msg.answer("Укажите период: /rsi 14")
+
+@dp.message(Command("pairs"))
+async def pairs_command(msg: Message):
+    await msg.answer("📊 Доступные пары:\n" + "\n".join(AVAILABLE_PAIRS))
+
+@dp.message(Command("list"))
+async def list_command(msg: Message):
+    pairs = get_user_pairs(msg.from_user.id)
+    await msg.answer("Ваши пары:\n" + "\n".join(pairs) if pairs else "Нет подписок")
 
 @dp.message(Command("check"))
 async def check_command(msg: Message):
