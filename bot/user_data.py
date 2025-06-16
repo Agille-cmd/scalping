@@ -13,7 +13,7 @@ AVAILABLE_PAIRS = [
     'EUR/AUD', 'USD/JPY', 'GBP/JPY', 'CHF/JPY', 'AUD/JPY',
     'USD/CHF', 'CAD/JPY', 'GBP/CHF', 'EUR/GBP', 'CAD/CHF',
     'AUD/CAD', 'GBP/USD', 'EUR/CHF', 'EUR/CAD', 'AUD/CHF',
-    'USD/CAD', 'EUR/JPY', 'EUR/USD', 'AUD/USD', 'BTC/USDT'
+    'USD/CAD', 'EUR/JPY', 'EUR/USD', 'AUD/USD'
 ]
 
 def load_data():

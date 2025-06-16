@@ -4,16 +4,14 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-exchange = ccxt.binance({
+exchange = ccxt.oanda({
     'enableRateLimit': True,
-    'options': {
-        'defaultType': 'spot'
-    }
+    'apiKey': 'YOUR_OANDA_API_KEY',  # Замените, если требуется авторизация
 })
 
-def fetch_ohlcv(symbol='BTC/USDT', timeframe='1h', limit=100):
+def fetch_ohlcv(symbol='EUR/USD', timeframe='1h', limit=100):
     try:
-        symbol = symbol.replace('/', '')
+        # OANDA использует символы с префиксом, например EUR/USD
         ohlcv = exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
         return pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     except Exception as e:
