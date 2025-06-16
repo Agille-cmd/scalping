@@ -1,4 +1,4 @@
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher, Router, types
 from aiogram.filters import Command
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -8,6 +8,8 @@ from bot.indicators import get_rsi
 
 bot = Bot(token=TELEGRAM_TOKEN)
 dp = Dispatcher()
+router = Router()
+dp.include_router(router)
 
 # Клавиатура для выбора пар
 def pairs_keyboard(action: str):
@@ -17,7 +19,7 @@ def pairs_keyboard(action: str):
     builder.adjust(2)
     return builder.as_markup()
 
-@dp.message(Command("help"))
+@router.message(Command("help"))
 async def help_command(msg: Message):
     help_text = (
         "🤖 *Бот мониторинга RSI*\n\n"
@@ -36,32 +38,32 @@ async def help_command(msg: Message):
     )
     await msg.answer(help_text, parse_mode="Markdown")
 
-@dp.message(Command("add"))
+@router.message(Command("add"))
 async def add_menu(msg: Message):
     await msg.answer(
         "Выберите пару для добавления:",
         reply_markup=pairs_keyboard("add")
     )
 
-@dp.message(Command("remove"))
+@router.message(Command("remove"))
 async def remove_menu(msg: Message):
     await msg.answer(
         "Выберите пару для удаления:",
         reply_markup=pairs_keyboard("remove")
     )
 
-@dp.message(Command("add_all"))
+@router.message(Command("add_all"))
 async def add_all(msg: Message):
     for pair in AVAILABLE_PAIRS:
         add_pair(msg.from_user.id, pair)
     await msg.answer("✅ Подписаны на все доступные пары")
 
-@dp.message(Command("remove_all"))
+@router.message(Command("remove_all"))
 async def remove_all(msg: Message):
     clear_pairs(msg.from_user.id)
     await msg.answer("🧹 Все подписки удалены")
 
-@dp.callback_query(lambda c: c.data.startswith(("add_", "remove_")))
+@router.callback_query(lambda c: c.data.startswith(("add_", "remove_")))
 async def handle_pair_selection(callback: types.CallbackQuery):
     action, pair = callback.data.split('_')
     user_id = callback.from_user.id
@@ -82,7 +84,7 @@ async def handle_pair_selection(callback: types.CallbackQuery):
         reply_markup=pairs_keyboard(action)
     )
 
-@dp.message(Command("rsi"))
+@router.message(Command("rsi"))
 async def set_rsi(msg: Message):
     try:
         period = int(msg.text.split()[1])
@@ -94,16 +96,16 @@ async def set_rsi(msg: Message):
     except (IndexError, ValueError):
         await msg.answer("Укажите период: /rsi 14")
 
-@dp.message(Command("pairs"))
+@router.message(Command("pairs"))
 async def pairs_command(msg: Message):
     await msg.answer("📊 Доступные пары:\n" + "\n".join(AVAILABLE_PAIRS))
 
-@dp.message(Command("list"))
+@router.message(Command("list"))
 async def list_command(msg: Message):
     pairs = get_user_pairs(msg.from_user.id)
     await msg.answer("Ваши пары:\n" + "\n".join(pairs) if pairs else "Нет подписок")
 
-@dp.message(Command("check"))
+@router.message(Command("check"))
 async def check_command(msg: Message):
     pairs = get_user_pairs(msg.from_user.id)
     if not pairs:
@@ -118,6 +120,6 @@ async def check_command(msg: Message):
     
     await msg.answer("\n".join(results))
 
-@dp.message()
+@router.message()
 async def unknown_command(msg: Message):
     await msg.answer("Неизвестная команда. Используйте /help")
