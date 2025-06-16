@@ -1,25 +1,26 @@
-import requests
-import time
+from aiogram import Bot
+from bot.data import TELEGRAM_TOKEN
+from bot.user_data import user_pairs, get_rsi_period
+from bot.indicators import get_rsi
+import asyncio
 
-def send_telegram_message(bot_token, chat_id, message, max_retries=3):
-    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    payload = {
-        'chat_id': chat_id,
-        'text': message,
-        'parse_mode': 'Markdown'
-    }
-    
-    for attempt in range(max_retries):
-        try:
-            response = requests.post(url, data=payload, timeout=10)
-            if response.status_code == 200:
-                return True
-            else:
-                print(f"Ошибка Telegram API (попытка {attempt + 1}): {response.text}")
-        except Exception as e:
-            print(f"Ошибка соединения (попытка {attempt + 1}): {str(e)}")
+bot = Bot(token=TELEGRAM_TOKEN)
+
+async def check_rsi_levels():
+    while True:
+        for user_id, pairs in user_pairs.items():
+            for pair in pairs:
+                rsi = get_rsi(user_id, pair)
+                if rsi is None:
+                    continue
+                
+                period = get_rsi_period(user_id)
+                if rsi > 70:
+                    await bot.send_message(user_id, f"⚠️ {pair} RSI({period})={rsi:.2f} - ПЕРЕКУПЛЕННОСТЬ!")
+                elif rsi < 30:
+                    await bot.send_message(user_id, f"⚠️ {pair} RSI({period})={rsi:.2f} - ПЕРЕПРОДАННОСТЬ!")
         
-        if attempt < max_retries - 1:
-            time.sleep(2 ** attempt)  # Экспоненциальная задержка
-    
-    return False
+        await asyncio.sleep(300)  # 5 минут
+
+async def start_monitoring():
+    asyncio.create_task(check_rsi_levels())

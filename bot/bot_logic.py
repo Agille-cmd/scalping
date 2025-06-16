@@ -1,271 +1,99 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    CallbackQueryHandler,
-    ContextTypes
-)
-from datetime import datetime, timedelta
-from bot.user_data import (
-    get_pairs,
-    add_pair,
-    remove_pair,
-    get_available_pairs,
-    add_all_pairs,
-    remove_all_pairs,
-    get_user_settings,
-    update_user_settings
-)
-from bot import data, indicators
-import logging
+from aiogram import Bot, Dispatcher, Router, types
+from aiogram.filters import Command
+from aiogram.types import Message
+from bot.data import TELEGRAM_TOKEN, AVAILABLE_PAIRS
+from bot.user_data import *
+from bot.indicators import get_rsi
 
-logger = logging.getLogger(__name__)
+bot = Bot(token=TELEGRAM_TOKEN)
+dp = Dispatcher()
+router = Router()
 
-# Кэш для хранения RSI значений
-rsi_cache = {}
+@dp.message(Command("help"))
+async def help_command(msg: Message):
+    text = (
+        "🤖 *Доступные команды:*\n"
+        "/help — помощь\n"
+        "/check — проверить RSI ваших пар\n"
+        "/pairs — доступные валютные пары\n"
+        "/list — ваши подписки\n"
+        "/add EUR/USD — добавить пару\n"
+        "/add_all — подписаться на все пары\n"
+        "/remove EUR/USD — убрать пару\n"
+        "/remove_all — убрать все пары\n"
+        "/rsi 10 — установить период RSI\n"
+        "\nБот автоматически уведомит при RSI > 70 или < 30"
+    )
+    await msg.answer(text, parse_mode="Markdown")
 
-def format_rsi_message(pair, rsi_value, period):
-    if rsi_value is None:
-        return f"❌ Не удалось получить RSI для {pair}"
-    
-    if rsi_value > 70:
-        status = "🔴 Перекупленность"
-    elif rsi_value < 30:
-        status = "🟢 Перепроданность"
-    else:
-        status = "🟡 Нейтрально"
-    
-    return f"""📈 {pair}
-RSI: {rsi_value:.2f} (период {period})
-{status}"""
+@dp.message(Command("pairs"))
+async def pairs_command(msg: Message):
+    await msg.answer("📊 Доступные пары:\n" + "\n".join(AVAILABLE_PAIRS))
 
-async def get_rsi_for_pair(pair, user_id):
-    """Получаем RSI с кэшированием на 1 минуту"""
-    settings = get_user_settings(user_id)
-    period = settings.get('rsi_period', 14)
-    
-    # Проверяем кэш
-    if pair in rsi_cache:
-        value, timestamp = rsi_cache[pair]
-        if datetime.now() - timestamp < timedelta(minutes=1):
-            return format_rsi_message(pair, value, period)
-    
-    # Получаем новые данные
+@dp.message(Command("list"))
+async def list_command(msg: Message):
+    pairs = get_user_pairs(msg.from_user.id)
+    await msg.answer("Ваши пары:\n" + "\n".join(pairs) if pairs else "Нет подписок")
+
+@dp.message(Command("add"))
+async def add_command(msg: Message):
     try:
-        df = data.fetch_ohlcv(pair)
-        rsi_value = indicators.calculate_rsi(df, period)
-        rsi_cache[pair] = (rsi_value, datetime.now())
-        return format_rsi_message(pair, rsi_value, period)
-    except Exception as e:
-        logger.error(f"Ошибка получения RSI для {pair}: {e}")
-        return f"❌ Ошибка расчета RSI для {pair}"
+        pair = msg.text.split()[1].upper()
+        if pair in AVAILABLE_PAIRS:
+            add_pair(msg.from_user.id, pair)
+            await msg.answer(f"✅ Добавлено: {pair}")
+        else:
+            await msg.answer("Неверная пара. Используйте /pairs")
+    except IndexError:
+        await msg.answer("Укажите пару: /add EUR/USD")
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    help_text = """
-📊 Бот мониторинга RSI
+@dp.message(Command("add_all"))
+async def add_all_command(msg: Message):
+    for pair in AVAILABLE_PAIRS:
+        add_pair(msg.from_user.id, pair)
+    await msg.answer("✅ Подписаны на все пары")
 
-Основные команды:
-/rsi_all - RSI всех подписанных пар
-/rsi - RSI конкретной пары (меню выбора)
-/settings - текущие настройки
-/set_rsi [период] - изменить период RSI
-/add [пара] - добавить пару
-/remove [пара] - удалить пару
-/list - мои пары
-/pairs - все доступные пары
-/add_all - добавить все пары
-/remove_all - удалить все пары
-
-Примеры:
-/set_rsi 21 - установит период 21
-/add BTC/USDT - добавит пару
-/rsi - покажет меню выбора пар
-"""
-    await update.message.reply_text(help_text)
-
-async def show_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    settings = get_user_settings(user_id)
-    await update.message.reply_text(
-        f"⚙️ Ваши настройки:\n"
-        f"• Период RSI: {settings['rsi_period']}\n\n"
-        f"Изменить: /set_rsi [новый период]"
-    )
-
-async def set_rsi_period(update: Update, context: ContextTypes.DEFAULT_TYPE):
+@dp.message(Command("remove"))
+async def remove_command(msg: Message):
     try:
-        if not context.args:
-            await update.message.reply_text("Укажите период RSI (например: /set_rsi 21)")
-            return
-        
-        period = int(context.args[0])
-        if not 5 <= period <= 30:
-            await update.message.reply_text("Период RSI должен быть между 5 и 30")
-            return
-        
-        user_id = update.effective_user.id
-        settings = get_user_settings(user_id)
-        settings['rsi_period'] = period
-        update_user_settings(user_id, settings)
-        
-        await update.message.reply_text(f"✅ Период RSI изменен на {period}")
-    except ValueError:
-        await update.message.reply_text("Некорректное значение. Введите число от 5 до 30")
+        pair = msg.text.split()[1].upper()
+        remove_pair(msg.from_user.id, pair)
+        await msg.answer(f"❌ Удалено: {pair}")
+    except IndexError:
+        await msg.answer("Укажите пару: /remove EUR/USD")
 
-async def show_current_rsi(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показать RSI для всех подписанных пар"""
-    user_id = update.effective_user.id
-    pairs = get_pairs(user_id)
-    
+@dp.message(Command("remove_all"))
+async def remove_all_command(msg: Message):
+    clear_pairs(msg.from_user.id)
+    await msg.answer("🧹 Все пары удалены")
+
+@dp.message(Command("rsi"))
+async def set_rsi(msg: Message):
+    try:
+        period = int(msg.text.split()[1])
+        if 1 <= period <= 100:
+            set_rsi_period(msg.from_user.id, period)
+            await msg.answer(f"✅ Установлен RSI период: {period}")
+        else:
+            await msg.answer("Период должен быть 1-100")
+    except (IndexError, ValueError):
+        await msg.answer("Укажите период: /rsi 14")
+
+@dp.message(Command("check"))
+async def check_command(msg: Message):
+    pairs = get_user_pairs(msg.from_user.id)
     if not pairs:
-        await update.message.reply_text("У вас нет подписанных пар. Добавьте пары через /add")
+        await msg.answer("Нет подписок")
         return
     
-    message = "📊 Текущие значения RSI:\n\n"
+    results = []
     for pair in pairs:
-        rsi_message = await get_rsi_for_pair(pair, user_id)
-        message += f"{rsi_message}\n\n"
+        rsi = get_rsi(msg.from_user.id, pair)
+        status = "🔴 >70" if rsi > 70 else "🟢 <30" if rsi < 30 else "🟡"
+        results.append(f"{pair}: {rsi:.2f} {status}")
     
-    await update.message.reply_text(message)
+    await msg.answer("\n".join(results))
 
-async def select_pair_for_rsi(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показать меню выбора пар"""
-    user_id = update.effective_user.id
-    pairs = get_pairs(user_id)
-    
-    if not pairs:
-        await update.message.reply_text("У вас нет подписанных пар. Добавьте пары через /add")
-        return
-    
-    keyboard = []
-    for pair in pairs:
-        keyboard.append([InlineKeyboardButton(pair, callback_data=f"show_rsi_{pair}")])
-    
-    await update.message.reply_text(
-        "Выберите пару для проверки RSI:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-
-async def handle_rsi_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик нажатия кнопок"""
-    query = update.callback_query
-    await query.answer()
-    
-    if query.data.startswith("show_rsi_"):
-        pair = query.data.replace("show_rsi_", "")
-        user_id = query.from_user.id
-        rsi_message = await get_rsi_for_pair(pair, user_id)
-        
-        # Добавляем кнопку обновления
-        keyboard = [
-            [InlineKeyboardButton("🔄 Обновить", callback_data=f"refresh_rsi_{pair}")]
-        ]
-        
-        await query.edit_message_text(
-            rsi_message,
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-    
-    elif query.data.startswith("refresh_rsi_"):
-        pair = query.data.replace("refresh_rsi_", "")
-        user_id = query.from_user.id
-        # Удаляем значение из кэша для принудительного обновления
-        if pair in rsi_cache:
-            del rsi_cache[pair]
-        
-        rsi_message = await get_rsi_for_pair(pair, user_id)
-        keyboard = [
-            [InlineKeyboardButton("🔄 Обновить", callback_data=f"refresh_rsi_{pair}")]
-        ]
-        
-        await query.edit_message_text(
-            rsi_message,
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-
-async def add_pair_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("Укажите пару (например: /add BTC/USDT)")
-        return
-    
-    pair = context.args[0].upper()
-    if add_pair(update.effective_user.id, pair):
-        await update.message.reply_text(f"✅ Добавлена пара: {pair}")
-    else:
-        await update.message.reply_text(
-            f"❌ Не удалось добавить пару {pair}\n"
-            "Возможные причины:\n"
-            "- Пара уже добавлена\n"
-            "- Пара недоступна\n"
-            "Список пар: /pairs"
-        )
-
-async def remove_pair_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("Укажите пару (например: /remove BTC/USDT)")
-        return
-    
-    pair = context.args[0].upper()
-    if remove_pair(update.effective_user.id, pair):
-        await update.message.reply_text(f"❌ Удалена пара: {pair}")
-    else:
-        await update.message.reply_text(f"Пара {pair} не найдена в вашем списке")
-
-async def list_pairs(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    pairs = get_pairs(update.effective_user.id)
-    if not pairs:
-        await update.message.reply_text("У вас нет добавленных пар")
-    else:
-        await update.message.reply_text("📋 Ваши пары:\n" + "\n".join(pairs))
-
-async def show_available_pairs(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    pairs = get_available_pairs()
-    await update.message.reply_text("📌 Доступные пары:\n\n" + "\n".join(pairs))
-
-async def add_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if add_all_pairs(update.effective_user.id):
-        count = len(get_available_pairs())
-        await update.message.reply_text(f"✅ Добавлены все {count} доступных пар")
-    else:
-        await update.message.reply_text("❌ Не удалось добавить пары")
-
-async def remove_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [InlineKeyboardButton("Да, удалить все", callback_data="confirm_remove_all")],
-        [InlineKeyboardButton("Отмена", callback_data="cancel_remove_all")]
-    ]
-    await update.message.reply_text(
-        "⚠️ Вы уверены, что хотите удалить ВСЕ пары?",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
-    if query.data == "confirm_remove_all":
-        remove_all_pairs(query.from_user.id)
-        await query.edit_message_text("✅ Все пары удалены")
-    else:
-        await query.edit_message_text("❌ Удаление отменено")
-
-def run_bot(token):
-    app = Application.builder().token(token).build()
-    
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("settings", show_settings))
-    app.add_handler(CommandHandler("set_rsi", set_rsi_period))
-    app.add_handler(CommandHandler("add", add_pair_handler))
-    app.add_handler(CommandHandler("remove", remove_pair_handler))
-    app.add_handler(CommandHandler("list", list_pairs))
-    app.add_handler(CommandHandler("pairs", show_available_pairs))
-    app.add_handler(CommandHandler("add_all", add_all))
-    app.add_handler(CommandHandler("remove_all", remove_all))
-    
-    # Новые команды RSI
-    app.add_handler(CommandHandler("rsi_all", show_current_rsi))
-    app.add_handler(CommandHandler("rsi", select_pair_for_rsi))
-    app.add_handler(CallbackQueryHandler(handle_rsi_button))
-    app.add_handler(CallbackQueryHandler(button_handler))
-    
-    app.run_polling()
+@dp.message()
+async def unknown_command(msg: Message):
+    await msg.answer("Неизвестная команда. Используйте /help")

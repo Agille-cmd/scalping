@@ -1,19 +1,14 @@
-import ccxt
-import pandas as pd
-import logging
+import os
+import json
 
-logger = logging.getLogger(__name__)
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), '../config.json')
+with open(CONFIG_PATH) as f:
+    config = json.load(f)
 
-exchange = ccxt.oanda({
-    'enableRateLimit': True,
-    'apiKey': 'YOUR_OANDA_API_KEY',  # Замените, если требуется авторизация
-})
+TELEGRAM_TOKEN = config['telegram_token']
+ALPHA_VANTAGE_API_KEY = config['alpha_vantage_api_key']
 
-def fetch_ohlcv(symbol='EUR/USD', timeframe='1h', limit=100):
-    try:
-        # OANDA использует символы с префиксом, например EUR/USD
-        ohlcv = exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
-        return pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-    except Exception as e:
-        logger.error(f"Ошибка получения данных для {symbol}: {e}")
-        return None
+AVAILABLE_PAIRS = [
+    "EUR/USD", "USD/JPY", "GBP/USD", "USD/CHF", "AUD/USD",
+    "USD/CAD", "NZD/USD", "EUR/JPY", "GBP/JPY", "EUR/GBP"
+]
