@@ -57,3 +57,16 @@ def get_rsi_period(user_id):
 def get_user_pairs(user_id):
     data = load_data()
     return data["pairs"].get(str(user_id), [])
+
+def set_time_interval(user_id, interval):
+    data = load_data()
+    if "settings" not in data:
+        data["settings"] = {}
+    if str(user_id) not in data["settings"]:
+        data["settings"][str(user_id)] = {}
+    data["settings"][str(user_id)]["time_interval"] = interval
+    save_data(data)
+
+def get_time_interval(user_id):
+    data = load_data()
+    return data["settings"].get(str(user_id), {}).get("time_interval", "daily")

@@ -2,8 +2,12 @@ from aiogram import Bot, Dispatcher, Router, types
 from aiogram.filters import Command
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from bot.data import TELEGRAM_TOKEN, AVAILABLE_PAIRS
-from bot.user_data import *
+from bot.data import TELEGRAM_TOKEN, AVAILABLE_PAIRS, AVAILABLE_INTERVALS
+from bot.user_data import (
+    add_pair, remove_pair, clear_pairs,
+    set_rsi_period, get_rsi_period,
+    get_user_pairs, set_time_interval, get_time_interval
+)
 from bot.indicators import get_rsi
 
 bot = Bot(token=TELEGRAM_TOKEN)
@@ -16,6 +20,13 @@ def pairs_keyboard(action: str):
     builder = InlineKeyboardBuilder()
     for pair in AVAILABLE_PAIRS:
         builder.button(text=pair, callback_data=f"{action}_{pair}")
+    builder.adjust(2)
+    return builder.as_markup()
+
+def intervals_keyboard():
+    builder = InlineKeyboardBuilder()
+    for interval in AVAILABLE_INTERVALS:
+        builder.button(text=interval, callback_data=f"interval_{interval}")
     builder.adjust(2)
     return builder.as_markup()
 
@@ -112,13 +123,86 @@ async def check_command(msg: Message):
         await msg.answer("Нет подписок")
         return
     
-    results = []
-    for pair in pairs:
-        rsi = get_rsi(msg.from_user.id, pair)
-        status = "🔴 >70" if rsi > 70 else "🟢 <30" if rsi < 30 else "🟡"
-        results.append(f"{pair}: {rsi:.2f} {status}")
+    await msg.answer(
+        "Выберите пару для проверки:",
+        reply_markup=pairs_keyboard("check")
+    )
+
+@router.callback_query(lambda c: c.data.startswith("check_"))
+async def handle_check_selection(callback: types.CallbackQuery):
+    pair = callback.data.split('_')[1]
+    user_id = callback.from_user.id
+    rsi = get_rsi(user_id, pair)
     
-    await msg.answer("\n".join(results))
+    if rsi is None:
+        await callback.answer("Ошибка получения данных")
+        return
+    
+    period = get_rsi_period(user_id)
+    interval = get_time_interval(user_id)
+    status = "🔴 >70" if rsi > 70 else "🟢 <30" if rsi < 30 else "🟡"
+    
+    await callback.message.edit_text(
+        f"📊 {pair} (интервал: {interval})\n"
+        f"RSI({period}): {rsi:.2f} {status}\n\n"
+        "Выберите действие:",
+        reply_markup=InlineKeyboardBuilder()
+            .button(text="Изменить интервал", callback_data=f"change_interval_{pair}")
+            .as_markup()
+    )
+
+@router.callback_query(lambda c: c.data.startswith("back_to_check_"))
+async def handle_back_to_check(callback: types.CallbackQuery):
+    _, _, pair = callback.data.split('_', 2)
+    user_id = callback.from_user.id
+    rsi = get_rsi(user_id, pair)
+    
+    if rsi is None:
+        await callback.answer("Ошибка получения данных")
+        return
+    
+    period = get_rsi_period(user_id)
+    interval = get_time_interval(user_id)
+    status = "🔴 >70" if rsi > 70 else "🟢 <30" if rsi < 30 else "🟡"
+    
+    await callback.message.edit_text(
+        f"📊 {pair} (интервал: {interval})\n"
+        f"RSI({period}): {rsi:.2f} {status}\n\n"
+        "Выберите действие:",
+        reply_markup=InlineKeyboardBuilder()
+            .button(text="Изменить интервал", callback_data=f"change_interval_{pair}")
+            .as_markup()
+    )
+
+@router.message(Command("interval"))
+async def interval_menu(msg: Message):
+    await msg.answer(
+        "Выберите интервал свечей:",
+        reply_markup=intervals_keyboard()
+    )
+
+# Обработчик для изменения интервала
+@router.callback_query(lambda c: c.data.startswith(("interval_", "change_interval_")))
+async def handle_interval_selection(callback: types.CallbackQuery):
+    try:
+        if callback.data.startswith("interval_"):
+            interval = callback.data.split('_')[1]
+            set_time_interval(callback.from_user.id, interval)
+            await callback.answer(f"✅ Интервал изменен на {interval}")
+            await callback.message.delete()
+        else:
+            pair = callback.data.split('_')[2]
+            await callback.message.edit_reply_markup(
+                reply_markup=InlineKeyboardBuilder()
+                    .button(text="Назад", callback_data=f"check_{pair}")
+                    .as_markup()
+            )
+            await callback.message.answer(
+                "Выберите интервал свечей:",
+                reply_markup=intervals_keyboard()
+            )
+    except Exception as e:
+        await callback.answer(f"Ошибка: {str(e)}")
 
 @router.message()
 async def unknown_command(msg: Message):

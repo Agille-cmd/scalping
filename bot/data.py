@@ -15,3 +15,7 @@ AVAILABLE_PAIRS = [
     "AUD/CAD", "CAD/JPY", "CHF/JPY", "EUR/AUD",
     "EUR/NZD", "GBP/CAD", "GBP/CHF", "NZD/JPY"
 ]
+
+AVAILABLE_INTERVALS = [
+    "1min", "5min", "15min", "30min", "60min", "daily"
+]
