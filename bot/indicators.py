@@ -25,14 +25,16 @@ def handle_api_error(provider, error):
         print(f"Temporarily disabling {provider['name']} due to rate limit")
 
 def get_fx_data(symbol, interval='1min'):
-    """Улучшенная функция получения данных с обработкой ошибок"""
     try:
         # Проверка и форматирование символа
         if '/' not in symbol:
             raise ValueError(f"Invalid symbol format: {symbol}. Use 'EUR/USD' format")
-        
+
         from_curr, to_curr = symbol.split('/')
         provider = get_api_provider()
+
+        # Debug: проверим финальный symbol
+        print(f"⏳ Requesting data for {from_curr}{to_curr} from {provider['name']}")
         
         # TwelveData запрос
         if provider['name'] == 'twelvedata':
