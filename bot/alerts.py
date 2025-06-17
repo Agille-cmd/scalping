@@ -1,14 +1,27 @@
-from aiogram import Bot
-from bot.data import TELEGRAM_TOKEN
-from bot.user_data import get_user_pairs, get_rsi_period
-from bot.indicators import get_rsi
+import requests
 import asyncio
+from datetime import datetime
+from bot.data import API_PROVIDERS
+from bot.indicators import get_rsi  # Импорт функции get_rsi
+from bot.user_data import get_rsi_period, load_data  # Импорт функций из user_data
+from bot.bot_logic import bot  # Импорт экземпляра бота
 
-bot = Bot(token=TELEGRAM_TOKEN)
+async def check_api_status():
+    while True:
+        for provider in API_PROVIDERS:
+            if not provider.get('active', True):
+                try:
+                    test_url = f"{provider['url']}/status" if provider['name'] == 'twelvedata' else f"{provider['url']}/v1/marketstatus"
+                    response = requests.get(test_url, timeout=5)
+                    if response.status_code == 200:
+                        provider['active'] = True
+                        print(f"API {provider['name']} restored")
+                except Exception as e:
+                    print(f"API check error: {str(e)}")
+        await asyncio.sleep(3600)
 
 async def check_rsi_levels():
     while True:
-        from bot.user_data import load_data
         data = load_data()
         
         for user_id_str, pairs in data["pairs"].items():

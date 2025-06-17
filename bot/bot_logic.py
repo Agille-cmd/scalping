@@ -9,6 +9,8 @@ from bot.user_data import (
     get_user_pairs, set_time_interval, get_time_interval
 )
 from bot.indicators import get_rsi
+from datetime import datetime
+
 
 bot = Bot(token=TELEGRAM_TOKEN)
 dp = Dispatcher()
@@ -134,29 +136,26 @@ async def handle_check_selection(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     
     await callback.answer("Запрашиваю данные...")
-    
     rsi = get_rsi(user_id, pair)
     
     if rsi is None:
         await callback.message.answer(
-            "⚠️ Не удалось получить данные. Возможные причины:\n"
-            "1. Лимит запросов к API (макс. 5/мин)\n"
-            "2. Проблемы с интернет-соединением\n"
-            "3. Временная недоступность сервиса\n\n"
-            "Попробуйте позже или измените интервал (/interval)"
+            "⚠️ Не удалось получить данные. Попробуйте:\n"
+            "1. Проверить соединение\n"
+            "2. Попробовать позже\n"
+            "3. Сменить интервал (/interval)"
         )
         return
     
-    period = get_rsi_period(user_id)
     interval = get_time_interval(user_id)
     status = "🔴 >70" if rsi > 70 else "🟢 <30" if rsi < 30 else "🟡"
     
     await callback.message.edit_text(
         f"📊 {pair} (интервал: {interval})\n"
-        f"RSI({period}): {rsi:.2f} {status}\n\n"
-        "Выберите действие:",
+        f"RSI: {rsi:.2f} {status}\n"
+        f"Обновлено: {datetime.now().strftime('%H:%M:%S')}",
         reply_markup=InlineKeyboardBuilder()
-            .button(text="Изменить интервал", callback_data=f"change_interval_{pair}")
+            .button(text="🔄 Обновить", callback_data=f"check_{pair}")
             .as_markup()
     )
 

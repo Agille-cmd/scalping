@@ -1,21 +1,34 @@
 import os
-import json
+from dotenv import load_dotenv
 
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), '../config.json')
-with open(CONFIG_PATH) as f:
-    config = json.load(f)
+# Загружаем переменные из .env
+load_dotenv()
 
-TELEGRAM_TOKEN = config['telegram_token']
-ALPHA_VANTAGE_API_KEY = config['alpha_vantage_api_key']
+# Настройки API
+API_PROVIDERS = [
+    {
+        'name': 'twelvedata',
+        'key': os.getenv('TWELVE_DATA_KEY'),
+        'url': 'https://api.twelvedata.com',
+        'limits': {'day': 800, 'minute': 8},
+        'priority': 1
+    },
+    {
+        'name': 'polygon',
+        'key': os.getenv('POLYGON_KEY'),
+        'url': 'https://api.polygon.io',
+        'limits': {'day': 200, 'minute': 5},
+        'priority': 2
+    }
+]
+
+# Токен бота
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 
 AVAILABLE_PAIRS = [
-    "EUR/USD", "USD/JPY", "GBP/USD", "AUD/USD", 
+    "EUR/USD", "USD/JPY", "GBP/USD", "AUD/USD",
     "USD/CAD", "USD/CHF", "NZD/USD", "EUR/GBP",
     "EUR/JPY", "GBP/JPY", "AUD/JPY", "EUR/CAD",
     "AUD/CAD", "CAD/JPY", "CHF/JPY", "EUR/AUD",
     "EUR/NZD", "GBP/CAD", "GBP/CHF", "NZD/JPY"
-]
-
-AVAILABLE_INTERVALS = [
-    "1min", "5min", "15min", "30min", "60min", "daily"
 ]
