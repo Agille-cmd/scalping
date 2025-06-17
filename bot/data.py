@@ -20,6 +20,13 @@ if not TELEGRAM_TOKEN:
         "Please check your .env file in project root directory."
     )
 
+def check_api_keys():
+    """Проверка валидности API ключей при старте"""
+    for provider in API_PROVIDERS:
+        if not provider.get('key'):
+            print(f"⚠️ Missing API key for {provider['name']}")
+            provider['active'] = False
+
 # Остальные настройки
 API_PROVIDERS = [
     {

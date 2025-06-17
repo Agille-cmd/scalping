@@ -25,42 +25,56 @@ def handle_api_error(provider, error):
         print(f"Temporarily disabling {provider['name']} due to rate limit")
 
 def get_fx_data(symbol, interval='1min'):
-    """Получение данных с API с правильным форматированием символов"""
+    """Улучшенная функция получения данных с обработкой ошибок"""
     try:
-        # Проверяем и форматируем символ
+        # Проверка и форматирование символа
         if '/' not in symbol:
-            raise ValueError("Символ должен содержать '/' (например EUR/USD)")
-            
-        from_curr, to_curr = symbol.split('/')
-        pair_td = f"{from_curr}{to_curr}"  # Формат для TwelveData
+            raise ValueError(f"Invalid symbol format: {symbol}. Use 'EUR/USD' format")
         
+        from_curr, to_curr = symbol.split('/')
         provider = get_api_provider()
         
+        # TwelveData запрос
         if provider['name'] == 'twelvedata':
-            url = f"{provider['url']}/time_series?symbol={pair_td}&interval={interval}&apikey={provider['key']}&format=JSON"
-            response = requests.get(url)
+            url = f"{provider['url']}/time_series?symbol={from_curr}{to_curr}&interval={interval}&apikey={provider['key']}&outputsize=100&format=JSON"
+            response = requests.get(url, timeout=10)
             data = response.json()
             
-            if 'code' in data and data['code'] == 400:
-                raise ValueError(f"TwelveData error: {data.get('message')}")
+            # Проверка ответа
+            if 'code' in data and data['code'] == 429:
+                print("⚠️ TwelveData rate limit reached")
+                provider['active'] = False
+                return None
                 
             if 'values' not in data:
-                raise ValueError("Invalid response from TwelveData")
+                error_msg = data.get('message', 'No price data in response')
+                print(f"TwelveData error: {error_msg}")
+                return None
                 
-            return {item['datetime']: float(item['close']) for item in data['values']}
-            
-        else:  # Polygon
+            # Преобразование данных
+            return {
+                item['datetime']: float(item['close'])
+                for item in data['values']
+                if 'close' in item
+            }
+        
+        # Polygon запрос
+        else:
             url = f"{provider['url']}/v1/historic/forex/{from_curr}/{to_curr}/latest?apiKey={provider['key']}"
-            response = requests.get(url)
+            response = requests.get(url, timeout=10)
             data = response.json()
             
-            if 'status' in data and data['status'] != 'OK':
-                raise ValueError(f"Polygon error: {data.get('message', 'Unknown error')}")
+            if 'ticks' not in data:
+                print(f"Polygon error: {data.get('error', 'Invalid response')}")
+                return None
                 
             return {tick['t']: tick['c'] for tick in data['ticks']}
             
+    except requests.exceptions.RequestException as re:
+        print(f"Request failed: {str(re)}")
+        return None
     except Exception as e:
-        print(f"Error in get_fx_data: {str(e)}")
+        print(f"Unexpected error: {str(e)}")
         return None
 
 def calculate_rsi(prices, period=14):
