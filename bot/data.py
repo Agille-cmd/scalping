@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 
-# Загружаем переменные из .env
+# Загрузка переменных окружения
 load_dotenv()
 
 # Настройки API
@@ -25,6 +25,7 @@ API_PROVIDERS = [
 # Токен бота
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 
+# Доступные торговые пары
 AVAILABLE_PAIRS = [
     "EUR/USD", "USD/JPY", "GBP/USD", "AUD/USD",
     "USD/CAD", "USD/CHF", "NZD/USD", "EUR/GBP",
@@ -32,3 +33,6 @@ AVAILABLE_PAIRS = [
     "AUD/CAD", "CAD/JPY", "CHF/JPY", "EUR/AUD",
     "EUR/NZD", "GBP/CAD", "GBP/CHF", "NZD/JPY"
 ]
+
+# Доступные временные интервалы
+AVAILABLE_INTERVALS = ["1min", "5min", "15min", "30min", "60min", "daily"]
