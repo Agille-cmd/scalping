@@ -1,10 +1,26 @@
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
-# Загрузка переменных окружения
-load_dotenv()
+# Явно указываем путь к .env
+BASE_DIR = Path(__file__).parent.parent
+ENV_PATH = BASE_DIR / '.env'
 
-# Настройки API
+if ENV_PATH.exists():
+    load_dotenv(ENV_PATH)
+    print(f"✅ .env loaded from {ENV_PATH}")
+else:
+    print(f"⚠️ Warning: .env file not found at {ENV_PATH}")
+
+# Получаем токен с проверкой
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
+if not TELEGRAM_TOKEN:
+    raise ValueError(
+        "TELEGRAM_TOKEN not found in environment variables. "
+        "Please check your .env file in project root directory."
+    )
+
+# Остальные настройки
 API_PROVIDERS = [
     {
         'name': 'twelvedata',
@@ -21,9 +37,6 @@ API_PROVIDERS = [
         'priority': 2
     }
 ]
-
-# Токен бота
-TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 
 # Доступные торговые пары
 AVAILABLE_PAIRS = [

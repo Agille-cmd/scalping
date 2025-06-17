@@ -3,6 +3,9 @@ from aiogram.filters import Command
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from bot.data import TELEGRAM_TOKEN, AVAILABLE_PAIRS, AVAILABLE_INTERVALS
+if not TELEGRAM_TOKEN:
+    raise ValueError("Telegram token is not configured. Check your .env file")
+bot = Bot(token=TELEGRAM_TOKEN)
 from bot.user_data import (
     add_pair, remove_pair, clear_pairs,
     set_rsi_period, get_rsi_period,
