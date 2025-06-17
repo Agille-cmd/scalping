@@ -132,10 +132,19 @@ async def check_command(msg: Message):
 async def handle_check_selection(callback: types.CallbackQuery):
     pair = callback.data.split('_')[1]
     user_id = callback.from_user.id
+    
+    await callback.answer("Запрашиваю данные...")
+    
     rsi = get_rsi(user_id, pair)
     
     if rsi is None:
-        await callback.answer("Ошибка получения данных")
+        await callback.message.answer(
+            "⚠️ Не удалось получить данные. Возможные причины:\n"
+            "1. Лимит запросов к API (макс. 5/мин)\n"
+            "2. Проблемы с интернет-соединением\n"
+            "3. Временная недоступность сервиса\n\n"
+            "Попробуйте позже или измените интервал (/interval)"
+        )
         return
     
     period = get_rsi_period(user_id)
