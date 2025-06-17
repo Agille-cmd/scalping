@@ -4,18 +4,18 @@ import time
 from datetime import datetime
 from random import choice
 from bot.data import API_PROVIDERS, AVAILABLE_PAIRS
-from bot.user_data import get_rsi_period
+from bot.user_data import get_rsi_period, get_time_interval
 
 # Кэширование на 5 минут (как в исходной версии)
 rsi_cache = {}
 CACHE_TIME = 300
 
 def get_api_provider():
-    """Выбираем случайный доступный провайдер"""
+    """Выбор API провайдера с учётом доступности"""
     active_providers = [p for p in API_PROVIDERS if p.get('active', True)]
     if not active_providers:
-        raise Exception("No active API providers available")
-    return choice(sorted(active_providers, key=lambda x: x['priority']))
+        raise ValueError("Нет доступных API провайдеров")
+    return active_providers[0]  # Возвращаем провайдера с наивысшим приоритетом
 
 def handle_api_error(provider, error):
     """Обработка ошибок API"""
@@ -25,63 +25,99 @@ def handle_api_error(provider, error):
         print(f"Temporarily disabling {provider['name']} due to rate limit")
 
 def get_fx_data(symbol, interval='1min'):
-    """Получение данных с ротацией провайдеров"""
-    from_symbol, to_symbol = symbol.split('/')
-    
-    for attempt in range(3):
-        provider = get_api_provider()
-        try:
-            if provider['name'] == 'twelvedata':
-                url = f"{provider['url']}/time_series?symbol={from_symbol}{to_symbol}&interval={interval}&apikey={provider['key']}"
-                response = requests.get(url)
-                data = response.json()
-                if 'values' not in data:
-                    raise Exception(data.get('message', 'Invalid response'))
-                return {k['datetime']: float(k['close']) for k in data['values']}
+    """Получение данных с API с обработкой ошибок"""
+    try:
+        # Проверка и форматирование символа
+        if '/' not in symbol:
+            raise ValueError("Символ должен содержать '/' (например EUR/USD)")
             
-            elif provider['name'] == 'polygon':
-                url = f"{provider['url']}/v1/historic/forex/{from_symbol}/{to_symbol}/{datetime.now().strftime('%Y-%m-%d')}?apiKey={provider['key']}"
-                response = requests.get(url)
-                data = response.json()
-                if 'ticks' not in data:
-                    raise Exception(data.get('error', 'Invalid response'))
-                return {k['t']: k['c'] for k in data['ticks']}
-                
-        except Exception as e:
-            handle_api_error(provider, e)
-            time.sleep(1)
-    
-    raise Exception("All API providers failed")
+        from_curr, to_curr = symbol.split('/')
+        
+        provider = get_api_provider()
+        if provider['name'] == 'twelvedata':
+            # Формат для TwelveData
+            pair = f"{from_curr}{to_curr}"
+            url = f"{provider['url']}/time_series?symbol={pair}&interval={interval}&apikey={provider['key']}"
+        else:
+            # Формат для Polygon
+            url = f"{provider['url']}/v1/historic/forex/{from_curr}/{to_curr}/latest?apiKey={provider['key']}"
+        
+        response = requests.get(url)
+        response.raise_for_status()  # Проверка HTTP ошибок
+        
+        data = response.json()
+        
+        # TwelveData проверка
+        if provider['name'] == 'twelvedata' and 'values' not in data:
+            raise ValueError(f"TwelveData error: {data.get('message', 'Unknown error')}")
+        
+        # Polygon проверка
+        if provider['name'] == 'polygon' and 'ticks' not in data:
+            raise ValueError(f"Polygon error: {data.get('error', 'Unknown error')}")
+        
+        # Форматирование данных
+        if provider['name'] == 'twelvedata':
+            return {item['datetime']: float(item['close']) for item in data['values']}
+        else:
+            return {tick['t']: tick['c'] for tick in data['ticks']}
+            
+    except requests.exceptions.RequestException as re:
+        print(f"Request error: {str(re)}")
+        return None
+    except ValueError as ve:
+        print(f"Value error: {str(ve)}")
+        return None
+    except Exception as e:
+        print(f"Unexpected error: {str(e)}")
+        return None
 
 def calculate_rsi(prices, period=14):
-    """Расчет RSI из цен"""
-    series = pd.Series(prices)
-    delta = series.diff()
-    gain = delta.where(delta > 0, 0)
-    loss = -delta.where(delta < 0, 0)
-    
-    avg_gain = gain.rolling(period).mean()
-    avg_loss = loss.rolling(period).mean()
-    
-    rs = avg_gain / avg_loss
-    return 100 - (100 / (1 + rs)).iloc[-1].round(2)
+    """Расчёт RSI из цен с обработкой ошибок"""
+    try:
+        series = pd.Series(prices)
+        delta = series.diff()
+        
+        gain = delta.where(delta > 0, 0)
+        loss = -delta.where(delta < 0, 0)
+        
+        avg_gain = gain.rolling(window=period).mean()
+        avg_loss = loss.rolling(window=period).mean()
+        
+        rs = avg_gain / avg_loss
+        rsi = 100 - (100 / (1 + rs))
+        
+        return round(rsi.iloc[-1], 2)
+        
+    except Exception as e:
+        print(f"Error in calculate_rsi: {str(e)}")
+        return None
 
 def get_rsi(user_id, symbol):
-    """Основная функция получения RSI"""
-    if symbol not in AVAILABLE_PAIRS:
-        return None
-        
-    cache_key = (user_id, symbol)
-    if cache_key in rsi_cache:
-        value, timestamp = rsi_cache[cache_key]
-        if time.time() - timestamp < CACHE_TIME:
-            return value
-    
+    """Основная функция для получения RSI с обработкой ошибок"""
     try:
-        prices = get_fx_data(symbol)
-        rsi_value = calculate_rsi(prices, get_rsi_period(user_id))
-        rsi_cache[cache_key] = (rsi_value, time.time())
+        # Проверка допустимости символа
+        if symbol not in AVAILABLE_PAIRS:
+            raise ValueError(f"Неверная валютная пара: {symbol}")
+
+        # Получаем данные
+        interval = get_time_interval(user_id)
+        prices = get_fx_data(symbol, interval)
+        
+        if not prices:
+            raise ValueError("Не удалось получить данные о ценах")
+
+        # Рассчитываем RSI
+        period = get_rsi_period(user_id)
+        rsi_value = calculate_rsi(prices, period)
+        
+        if rsi_value is None:
+            raise ValueError("Ошибка расчёта RSI")
+
         return rsi_value
+        
+    except ValueError as ve:
+        print(f"ValueError in get_rsi: {str(ve)}")
+        return None
     except Exception as e:
-        print(f"Error getting RSI for {symbol}: {str(e)}")
+        print(f"Unexpected error in get_rsi: {str(e)}")
         return None

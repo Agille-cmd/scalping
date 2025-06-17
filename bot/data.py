@@ -47,5 +47,18 @@ AVAILABLE_PAIRS = [
     "EUR/NZD", "GBP/CAD", "GBP/CHF", "NZD/JPY"
 ]
 
+# Для TwelveData нужно использовать формат без '/'
+TD_PAIRS = [p.replace('/', '') for p in AVAILABLE_PAIRS]
+
 # Доступные временные интервалы
 AVAILABLE_INTERVALS = ["1min", "5min", "15min", "30min", "60min", "daily"]
+API_ENDPOINTS = {
+    'twelvedata': {
+        'forex': '/time_series?symbol={pair}&interval={interval}&apikey={key}',
+        'stocks': '/stocks?symbol={symbol}&interval={interval}&apikey={key}'
+    },
+    'polygon': {
+        'forex': '/v1/historic/forex/{from_curr}/{to_curr}/{date}?apiKey={key}',
+        'stocks': '/v2/aggs/ticker/{symbol}/range/1/{interval}/{start}/{end}?apiKey={key}'
+    }
+}

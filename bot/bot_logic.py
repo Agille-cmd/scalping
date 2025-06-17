@@ -139,28 +139,38 @@ async def handle_check_selection(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     
     await callback.answer("Запрашиваю данные...")
-    rsi = get_rsi(user_id, pair)
     
-    if rsi is None:
-        await callback.message.answer(
-            "⚠️ Не удалось получить данные. Попробуйте:\n"
-            "1. Проверить соединение\n"
-            "2. Попробовать позже\n"
-            "3. Сменить интервал (/interval)"
+    try:
+        if pair not in AVAILABLE_PAIRS:
+            raise ValueError("Неверная валютная пара")
+            
+        rsi = get_rsi(user_id, pair)
+        
+        if rsi is None:
+            raise ValueError("Не удалось получить данные RSI")
+            
+        interval = get_time_interval(user_id)
+        status = "🔴 >70" if rsi > 70 else "🟢 <30" if rsi < 30 else "🟡"
+        
+        await callback.message.edit_text(
+            f"📊 {pair} (интервал: {interval})\n"
+            f"RSI: {rsi:.2f} {status}\n"
+            f"Обновлено: {datetime.now().strftime('%H:%M:%S')}",
+            reply_markup=InlineKeyboardBuilder()
+                .button(text="🔄 Обновить", callback_data=f"check_{pair}")
+                .as_markup()
         )
-        return
-    
-    interval = get_time_interval(user_id)
-    status = "🔴 >70" if rsi > 70 else "🟢 <30" if rsi < 30 else "🟡"
-    
-    await callback.message.edit_text(
-        f"📊 {pair} (интервал: {interval})\n"
-        f"RSI: {rsi:.2f} {status}\n"
-        f"Обновлено: {datetime.now().strftime('%H:%M:%S')}",
-        reply_markup=InlineKeyboardBuilder()
-            .button(text="🔄 Обновить", callback_data=f"check_{pair}")
-            .as_markup()
-    )
+        
+    except Exception as e:
+        error_msg = (
+            f"⚠️ Ошибка при запросе {pair}:\n"
+            f"{str(e)}\n\n"
+            "Попробуйте:\n"
+            "1. Проверить интервал (/interval)\n"
+            "2. Попробовать позже\n"
+            "3. Выбрать другую пару"
+        )
+        await callback.message.answer(error_msg)
 
 @router.callback_query(lambda c: c.data.startswith("back_to_check_"))
 async def handle_back_to_check(callback: types.CallbackQuery):
@@ -215,6 +225,29 @@ async def handle_interval_selection(callback: types.CallbackQuery):
     except Exception as e:
         await callback.answer(f"Ошибка: {str(e)}")
 
+@router.callback_query(lambda c: any(c.data.startswith(x) for x in ["check_", "add_", "remove_"]))
+async def handle_pair_selection(callback: types.CallbackQuery):
+    try:
+        _, pair = callback.data.split('_', 1)
+        
+        # Проверяем допустимость пары
+        if pair not in AVAILABLE_PAIRS:
+            await callback.answer("Неверная валютная пара")
+            return
+            
+        # Ваша основная логика обработки здесь
+        # Например, для команды check_:
+        if callback.data.startswith("check_"):
+            rsi = get_rsi(callback.from_user.id, pair)
+            if rsi is None:
+                await callback.answer("Ошибка получения данных")
+                return
+                
+            # Показать RSI и т.д.
+            
+    except Exception as e:  # Добавленный блок except
+        print(f"Error in handle_pair_selection: {e}")
+        await callback.answer("Произошла ошибка при обработке запроса")
 @router.message()
 async def unknown_command(msg: Message):
     await msg.answer("Неизвестная команда. Используйте /help")
