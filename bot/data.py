@@ -58,7 +58,7 @@ AVAILABLE_PAIRS = [
 TD_PAIRS = [p.replace('/', '') for p in AVAILABLE_PAIRS]
 
 # Доступные временные интервалы
-AVAILABLE_INTERVALS = ["1min", "5min", "15min", "30min", "60min", "daily"]
+AVAILABLE_INTERVALS = ["1min", "5min", "15min", "30min", "1h", "4h", "1day"]
 API_ENDPOINTS = {
     'twelvedata': {
         'forex': '/time_series?symbol={pair}&interval={interval}&apikey={key}',

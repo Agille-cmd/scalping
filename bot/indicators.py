@@ -11,11 +11,14 @@ rsi_cache = {}
 CACHE_TIME = 300
 
 def get_api_provider():
-    """Выбор API провайдера с учётом доступности"""
-    active_providers = [p for p in API_PROVIDERS if p.get('active', True)]
+    active_providers = sorted(
+        [p for p in API_PROVIDERS if p.get('active', True)],
+        key=lambda x: x['priority']
+    )
     if not active_providers:
         raise ValueError("Нет доступных API провайдеров")
-    return active_providers[0]  # Возвращаем провайдера с наивысшим приоритетом
+    return active_providers[0]
+
 
 def handle_api_error(provider, error):
     """Обработка ошибок API"""
@@ -25,59 +28,71 @@ def handle_api_error(provider, error):
         print(f"Temporarily disabling {provider['name']} due to rate limit")
 
 def get_fx_data(symbol, interval='1min'):
+    """Получение исторических данных по валютной паре с обработкой всех ошибок"""
     try:
-        # Проверка и форматирование символа
+        # Проверка формата пары
         if '/' not in symbol:
-            raise ValueError(f"Invalid symbol format: {symbol}. Use 'EUR/USD' format")
-
+            raise ValueError(f"❌ Неверный формат символа: {symbol}. Используй формат 'EUR/USD'")
+        
         from_curr, to_curr = symbol.split('/')
         provider = get_api_provider()
-
-        # Debug: проверим финальный symbol
-        print(f"⏳ Requesting data for {from_curr}{to_curr} from {provider['name']}")
         
-        # TwelveData запрос
+        print(f"📡 Попытка запроса данных: {symbol} ({interval}) через {provider['name']}")
+
+        # ==== TwelveData ====
         if provider['name'] == 'twelvedata':
-            url = f"{provider['url']}/time_series?symbol={from_curr}{to_curr}&interval={interval}&apikey={provider['key']}&outputsize=100&format=JSON"
-            response = requests.get(url, timeout=10)
+            url = f"{provider['url']}/time_series"
+            params = {
+                "symbol": f"{from_curr}{to_curr}",
+                "interval": interval,
+                "apikey": provider["key"],
+                "outputsize": 100,
+                "format": "JSON"
+            }
+            response = requests.get(url, params=params, timeout=10)
             data = response.json()
-            
-            # Проверка ответа
-            if 'code' in data and data['code'] == 429:
-                print("⚠️ TwelveData rate limit reached")
+
+            # Обработка ошибок
+            if response.status_code != 200 or "values" not in data:
+                print(f"⚠️ TwelveData error: {data.get('message', 'Нет данных')}")
                 provider['active'] = False
                 return None
-                
-            if 'values' not in data:
-                error_msg = data.get('message', 'No price data in response')
-                print(f"TwelveData error: {error_msg}")
-                return None
-                
-            # Преобразование данных
+            
             return {
                 item['datetime']: float(item['close'])
                 for item in data['values']
                 if 'close' in item
             }
-        
-        # Polygon запрос
-        else:
-            url = f"{provider['url']}/v1/historic/forex/{from_curr}/{to_curr}/latest?apiKey={provider['key']}"
-            response = requests.get(url, timeout=10)
+
+        # ==== Polygon.io ====
+        elif provider['name'] == 'polygon':
+            url = f"{provider['url']}/v1/historic/forex/{from_curr}/{to_curr}/latest"
+            params = {
+                "apiKey": provider["key"]
+            }
+            response = requests.get(url, params=params, timeout=10)
             data = response.json()
-            
-            if 'ticks' not in data:
-                print(f"Polygon error: {data.get('error', 'Invalid response')}")
+
+            if response.status_code != 200 or 'ticks' not in data:
+                print(f"⚠️ Polygon error: {data.get('error', 'Нет данных')}")
+                provider['active'] = False
                 return None
-                
-            return {tick['t']: tick['c'] for tick in data['ticks']}
-            
+
+            return {
+                tick['t']: tick['c'] for tick in data['ticks']
+            }
+
+        else:
+            raise ValueError(f"❌ Неизвестный API-провайдер: {provider['name']}")
+
     except requests.exceptions.RequestException as re:
-        print(f"Request failed: {str(re)}")
+        print(f"🌐 Ошибка запроса: {str(re)}")
+        provider['active'] = False
         return None
     except Exception as e:
-        print(f"Unexpected error: {str(e)}")
+        print(f"💥 Неожиданная ошибка в get_fx_data: {str(e)}")
         return None
+
 
 def calculate_rsi(prices, period=14):
     """Расчёт RSI из цен с обработкой ошибок"""

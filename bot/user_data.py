@@ -69,4 +69,4 @@ def set_time_interval(user_id, interval):
 
 def get_time_interval(user_id):
     data = load_data()
-    return data["settings"].get(str(user_id), {}).get("time_interval", "daily")
+    return data["settings"].get(str(user_id), {}).get("time_interval", "1day")
