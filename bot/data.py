@@ -34,16 +34,19 @@ API_PROVIDERS = [
         'key': os.getenv('TWELVE_DATA_KEY'),
         'url': 'https://api.twelvedata.com',
         'limits': {'day': 800, 'minute': 8},
-        'priority': 1
+        'priority': 1,
+        'active': False  
     },
     {
         'name': 'polygon',
         'key': os.getenv('POLYGON_KEY'),
         'url': 'https://api.polygon.io',
         'limits': {'day': 200, 'minute': 5},
-        'priority': 2
+        'priority': 2,
+        'active': True
     }
 ]
+
 
 # Доступные торговые пары
 AVAILABLE_PAIRS = [
