@@ -1,3 +1,4 @@
+# data.py — минимизирован, только необходимые настройки
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -20,34 +21,6 @@ if not TELEGRAM_TOKEN:
         "Please check your .env file in project root directory."
     )
 
-def check_api_keys():
-    """Проверка валидности API ключей при старте"""
-    for provider in API_PROVIDERS:
-        if not provider.get('key'):
-            print(f"⚠️ Missing API key for {provider['name']}")
-            provider['active'] = False
-
-# Остальные настройки
-API_PROVIDERS = [
-    {
-        'name': 'twelvedata',
-        'key': os.getenv('TWELVE_DATA_KEY'),
-        'url': 'https://api.twelvedata.com',
-        'limits': {'day': 800, 'minute': 8},
-        'priority': 1,
-        'active': False  
-    },
-    {
-        'name': 'polygon',
-        'key': os.getenv('POLYGON_KEY'),
-        'url': 'https://api.polygon.io',
-        'limits': {'day': 200, 'minute': 5},
-        'priority': 2,
-        'active': True
-    }
-]
-
-
 # Доступные торговые пары
 AVAILABLE_PAIRS = [
     "EUR/USD", "USD/JPY", "GBP/USD", "AUD/USD",
@@ -57,18 +30,5 @@ AVAILABLE_PAIRS = [
     "EUR/NZD", "GBP/CAD", "GBP/CHF", "NZD/JPY"
 ]
 
-# Для TwelveData нужно использовать формат без '/'
-TD_PAIRS = [p.replace('/', '') for p in AVAILABLE_PAIRS]
-
-# Доступные временные интервалы
+# Доступные интервалы
 AVAILABLE_INTERVALS = ["1min", "5min", "15min", "30min", "1h", "4h", "1day"]
-API_ENDPOINTS = {
-    'twelvedata': {
-        'forex': '/time_series?symbol={pair}&interval={interval}&apikey={key}',
-        'stocks': '/stocks?symbol={symbol}&interval={interval}&apikey={key}'
-    },
-    'polygon': {
-        'forex': '/v1/historic/forex/{from_curr}/{to_curr}/{date}?apiKey={key}',
-        'stocks': '/v2/aggs/ticker/{symbol}/range/1/{interval}/{start}/{end}?apiKey={key}'
-    }
-}

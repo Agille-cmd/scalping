@@ -1,7 +1,6 @@
 import logging
 from bot import dp, bot, start_monitoring
 import asyncio
-from bot.alerts import check_api_status
 from dotenv import load_dotenv
 
 load_dotenv()  # Загружаем переменные окружения
@@ -12,7 +11,7 @@ logging.basicConfig(
 )
 
 async def main():
-    asyncio.create_task(check_api_status())
+    await start_monitoring()
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
