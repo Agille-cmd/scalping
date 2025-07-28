@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from typing import List
+from typing import List, Tuple
 import logging
 
 # Настройка логгера
@@ -11,8 +11,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Загрузка .env файла
-if not load_dotenv('/root/scalping/.env'):
-    logger.warning("Не удалось загрузить .env файл, пробуем переменные окружения")
+load_dotenv('/root/scalping/.env')
 
 # Основные настройки
 TELEGRAM_TOKEN: str = os.getenv('TELEGRAM_TOKEN', '')
@@ -20,18 +19,30 @@ TWELVEDATA_API_KEYS: List[str] = [
     key.strip() for key in os.getenv('TWELVEDATA_API_KEYS', '').split(',') if key.strip()
 ]
 
-# Валютные пары
+# Торговые настройки
 ALLOWED_PAIRS: List[str] = [
     "EUR/USD", "USD/JPY", "GBP/USD", "AUD/USD", "USD/CAD",
     "USD/CHF", "EUR/GBP", "EUR/JPY", "GBP/JPY", "AUD/JPY"
 ]
 
-# Проверка токена
+# Временные параметры
+ACTIVE_TRADING_HOURS: List[Tuple[int, int]] = [
+    (9, 12),  # Лондонская сессия
+    (14, 17)  # Нью-Йоркская сессия
+]
+
+# Параметры индикаторов
+RSI_PERIOD: int = 7
+EMA_FAST: int = 20
+EMA_SLOW: int = 50
+BB_PERIOD: int = 20
+BB_STDDEV: int = 2
+
+# Проверка конфигурации
 if not TELEGRAM_TOKEN:
-    logger.error("Токен Telegram не найден. Проверьте:")
-    logger.error("1. Существует ли файл /root/scalping/.env")
-    logger.error("2. Содержит ли он TELEGRAM_TOKEN=ваш_токен")
-    logger.error("3. Установлены ли права 600 на .env файл")
-    exit(1)
+    raise ValueError("TELEGRAM_TOKEN не может быть пустым")
+
+if not TWELVEDATA_API_KEYS:
+    raise ValueError("Не указаны ключи для TwelveData API")
 
 logger.info("Конфигурация успешно загружена")
